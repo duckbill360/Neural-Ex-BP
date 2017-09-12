@@ -19,5 +19,5 @@ frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
 G = polar_codes.generate_G_N(N)
 
 if __name__ == '__main__':
-    
+
     pass
