@@ -28,9 +28,9 @@ def forwardprop(x, alpha, beta):
 
     # L messages and R messages
     L = tf.Variable(dtype=tf.float64, initial_value=tf.zeros((iter_num * n, N,), dtype=tf.float64),
-                    expected_shape=(iter_num * n, N,), name='L')
+                    expected_shape=(iter_num * n, N,), name='L', trainable=False)
     R = tf.Variable(dtype=tf.float64, initial_value=tf.zeros((iter_num * n, N,), dtype=tf.float64),
-                    expected_shape=(iter_num * n, N,), name='R')
+                    expected_shape=(iter_num * n, N,), name='R', trainable=False)
 
     for k in range(iter_num):
         # L Propagation
@@ -38,6 +38,7 @@ def forwardprop(x, alpha, beta):
             for j in range(N // 2):
                 pass
                 # TODO
+            tf.Tensor()
 
     print(L)
     print(R)

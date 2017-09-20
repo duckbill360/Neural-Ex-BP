@@ -8,9 +8,12 @@ import tensorflow as tf
 import numpy as np
 from sklearn import datasets
 from sklearn.model_selection import train_test_split
+import os
 
 RANDOM_SEED = 42
 tf.set_random_seed(RANDOM_SEED)
+
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 
 def init_weights(shape):
