@@ -38,7 +38,6 @@ def forwardprop(x, alpha, beta):
             for j in range(N // 2):
                 pass
                 # TODO
-            tf.Tensor()
 
     print(L)
     print(R)
