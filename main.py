@@ -74,7 +74,8 @@ def forwardprop(x, alpha, beta):
     return y_hat
 
 
-def f():
+# Min-Sum Algorithm
+def f(x, y):
     return tf.sign(x) * tf.sign(y) * tf.minimum(tf.abs(x), tf.abs(y))
 
 
