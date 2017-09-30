@@ -9,7 +9,7 @@ import os
 
 ############### Polar Codes PARAMETERS ###############
 iter_num = 2
-N = 1024        # code length
+N = 64        # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
@@ -37,7 +37,6 @@ def forwardprop(x_LLR, alpha, beta, threshold):
 
     R_LLR = tf.constant(LLR, dtype=tf.float64)
     N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
-
     Ex_counter = 0
 
     #####################################################
@@ -82,6 +81,13 @@ def forwardprop(x_LLR, alpha, beta, threshold):
         upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
         lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
         previous_layer = concatenate(upper, lower)
+
+        # This is for the Ex-BP decoder.
+        upper_Ex = alpha[Ex_counter, : N // 2] * upper + beta[Ex_counter, N // 2:] * previous_layer[N // 2:]
+        lower_Ex = alpha[Ex_counter, N // 2:] * lower + beta[Ex_counter, : N // 2] * previous_layer[: N // 2]
+        Ex_counter += 1
+        previous_layer = concatenate(upper_Ex, lower_Ex)
+
         hidden_layers.append(previous_layer)
 
         # Not the first L propagation layer.
@@ -116,58 +122,19 @@ def forwardprop(x_LLR, alpha, beta, threshold):
             previous_layer = interlace(upper, lower)
             hidden_layers.append(previous_layer)
 
-
-    #####################################################
-    #####################################################
-    # Run through all the other hidden layers.
-    # for i in range(n - 1, len(hidden_layers) - 1):
-    #     RL_indicator = i % layers_per_iter
-    #
-    #     ############### R propagation ###############
-    #     # Not the first 'R' propagation, need to consider the actual L messages.
-    #     if RL_indicator < (n - 1):
-    #         print('R')
-    #         index = RL_indicator % (n - 1)
-    #         print(index)
-    #         if index == 0:
-    #             for j in range(N // 2):
-    #                 hidden_layers[i][2 * j].assign(f(R_LLR[j], R_LLR[j + N // 2]
-    #                                                  + hidden_layers[i - 1 - 2 * index][2 * j + 1]))
-    #                 hidden_layers[i][2 * j + 1].assign(f(hidden_layers[i - 1 - 2 * index][2 * j], R_LLR[j])
-    #                                                    + R_LLR[j + N // 2])
-    #         else:
-    #             for j in range(N // 2):
-    #                 hidden_layers[i][2 * j].assign(f(hidden_layers[i - 1][j], hidden_layers[i - 1][j + N // 2]
-    #                                                  + hidden_layers[i - 1 - 2 * index][2 * j + 1]))
-    #                 hidden_layers[i][2 * j + 1].assign(f(hidden_layers[i - 1 - 2 * index][2 * j],
-    #                                                      hidden_layers[i - 1][j]) + hidden_layers[i - 1][j + N // 2])
-    #
-    #     ############### L propagation ###############
-    #     # Need to consider the previous R messages.
-    #     elif RL_indicator >= (n - 1):
-    #         print('L')
-    #         index = RL_indicator % (n - 1)
-    #         print(index)
-    #         # If it is the first L layer
-    #         if index == 0:
-    #             for j in range(N // 2):
-    #                 hidden_layers[i][j].assign(f(x_LLR[2 * j], x_LLR[2 * j + 1] + hidden_layers[i - 1][j + N // 2]))
-    #                 hidden_layers[i][j + N // 2].assign(f(hidden_layers[i - 1][j], x_LLR[2 * j]) + x_LLR[2 * j + 1])
-    #         else:
-    #             for j in range(N // 2):
-    #                 hidden_layers[i][j].assign(f(hidden_layers[i - 1][2 * j], hidden_layers[i - 1][2 * j + 1] +
-    #                                              hidden_layers[i - 1 - 2 * index][j + N // 2]))
-    #                 hidden_layers[i][j + N // 2].assign(f(hidden_layers[i - 1 - 2 * index][j], hidden_layers[i - 1][2 * j])
-    #                                                     + hidden_layers[i - 1][2 * j + 1])
-
-    # Need an additional L layer (the last layer) to produce outputs
-
     # The last full L propagation. Need to do 1 more time.
     cur_idx += 1
     print("L Layer :", cur_idx)
     upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
     lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
     previous_layer = concatenate(upper, lower)
+
+    # This is for the Ex-BP decoder.
+    upper_Ex = alpha[Ex_counter, : N // 2] * upper + beta[Ex_counter, N // 2:] * previous_layer[N // 2:]
+    lower_Ex = alpha[Ex_counter, N // 2:] * lower + beta[Ex_counter, : N // 2] * previous_layer[: N // 2]
+    Ex_counter += 1
+    previous_layer = concatenate(upper_Ex, lower_Ex)
+
     hidden_layers.append(previous_layer)
 
     # Not the first L propagation layer.
@@ -213,17 +180,19 @@ def concatenate(a, b):
 
 
 def add_noise(signal):
-    noise = np.random.normal(scale=sigma, size=(1, N))
+    noise = np.random.normal(scale=sigma, size=(N, ))
     return signal + noise
 
 
 if __name__ == '__main__':
 
     x_train = add_noise(np.zeros((N, )))
+    print(x_train.shape)
     y_train = np.zeros((N, ))
 
     # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(tf.float64, shape=(N, ), name='x')
+    print(x)
     y = tf.placeholder(tf.float64, shape=(N, ), name='y')
 
     # alpha and beta are the weights to be trained of the Ex-BP decoder.
@@ -243,15 +212,26 @@ if __name__ == '__main__':
     # TensorBoard command: tensorboard --logdir="./TensorBoard"
 
     cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
-    update = tf.train.GradientDescentOptimizer(0.01).minimize(cost)
+    update = tf.train.GradientDescentOptimizer(0.1).minimize(cost)
 
     print(tf.trainable_variables())
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
+
+        alpha_val = sess.run(alpha)
+        beta_val = sess.run(beta)
+        print(alpha_val)
+        print(beta_val)
+
         for epoch in range(100):
             print('Epoch: ', epoch)
             sess.run(update, feed_dict={x: x_train, y: y_train})
+
+        alpha_val = sess.run(alpha)
+        beta_val = sess.run(beta)
+        print(alpha_val)
+        print(beta_val)
 
         writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
 
