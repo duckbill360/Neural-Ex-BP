@@ -8,8 +8,10 @@ import os
 # os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
 
 ############### Polar Codes PARAMETERS ###############
+N_codewords = 20
+N_epochs = 100
 iter_num = 2
-N = 64        # code length
+N = 8           # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
@@ -25,7 +27,7 @@ frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
 G = polar_codes.generate_G_N(N)
 
 
-def forwardprop(x_LLR, alpha, beta, threshold):
+def forwardprop(x_LLR, alpha, beta):
 
     # The list of all hidden layers
     hidden_layers = []
@@ -51,7 +53,6 @@ def forwardprop(x_LLR, alpha, beta, threshold):
     lower = f(N_2_zeros, R_LLR[: N // 2]) + R_LLR[N // 2:]
     previous_layer = interlace(upper, lower)
     hidden_layers.append(previous_layer)
-    print(previous_layer)
 
     # Not the first R hidden layer, so take the previous layers as inputs and view L as 0
     for i in range(n - 2):
@@ -83,10 +84,13 @@ def forwardprop(x_LLR, alpha, beta, threshold):
         previous_layer = concatenate(upper, lower)
 
         # This is for the Ex-BP decoder.
-        upper_Ex = alpha[Ex_counter, : N // 2] * upper + beta[Ex_counter, N // 2:] * previous_layer[N // 2:]
-        lower_Ex = alpha[Ex_counter, N // 2:] * lower + beta[Ex_counter, : N // 2] * previous_layer[: N // 2]
+
+
+        upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
+        lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
         Ex_counter += 1
         previous_layer = concatenate(upper_Ex, lower_Ex)
+        ###############################
 
         hidden_layers.append(previous_layer)
 
@@ -130,10 +134,11 @@ def forwardprop(x_LLR, alpha, beta, threshold):
     previous_layer = concatenate(upper, lower)
 
     # This is for the Ex-BP decoder.
-    upper_Ex = alpha[Ex_counter, : N // 2] * upper + beta[Ex_counter, N // 2:] * previous_layer[N // 2:]
-    lower_Ex = alpha[Ex_counter, N // 2:] * lower + beta[Ex_counter, : N // 2] * previous_layer[: N // 2]
+    upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
+    lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
     Ex_counter += 1
     previous_layer = concatenate(upper_Ex, lower_Ex)
+    ###############################
 
     hidden_layers.append(previous_layer)
 
@@ -186,47 +191,52 @@ def add_noise(signal):
 
 if __name__ == '__main__':
 
-    x_train = add_noise(np.zeros((N, )))
-    print(x_train.shape)
+    x_train = [add_noise(np.zeros((N, ))) for i in range(N_codewords)]
     y_train = np.zeros((N, ))
 
     # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(tf.float64, shape=(N, ), name='x')
-    print(x)
     y = tf.placeholder(tf.float64, shape=(N, ), name='y')
 
     # alpha and beta are the weights to be trained of the Ex-BP decoder.
     # Can also be initialized using "random_normal".
-    alpha = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
-                        expected_shape=(iter_num, N // 2, ), name='alpha', trainable=True)
-    beta = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
-                       expected_shape=(iter_num, N // 2, ), name='beta', trainable=True)
+    # alpha = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
+    #                     expected_shape=(iter_num, N // 2, ), name='alpha', trainable=True)
+    # beta = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
+    #                    expected_shape=(iter_num, N // 2, ), name='beta', trainable=True)
+    alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((N, ), dtype=tf.float64), name='alpha', trainable=True) for _ in range(iter_num)]
+    beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta', trainable=True) for _ in range(iter_num)]
 
     # y_hat is a length-N vector.
-    y_hat = forwardprop(x, alpha, beta, threshold=5)
-
+    y_hat = forwardprop(x, alpha, beta)
 
     # with tf.Session() as sess:
     #     sess.run(tf.global_variables_initializer())
     #     writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
     # TensorBoard command: tensorboard --logdir="./TensorBoard"
 
-    cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
-    update = tf.train.GradientDescentOptimizer(0.1).minimize(cost)
-
-    print(tf.trainable_variables())
+    cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
+    # cost = tf.reduce_sum(tf.square(y - y_hat))
+    update = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
+        print('x_train :', x_train[0])
+        print('y_train :', y_train)
+        print('y_hat :', sess.run(y_hat, feed_dict={x: x_train[0]}))
+        cost_val = sess.run(cost, feed_dict={x: x_train[0], y: y_train})
+
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
-        print(alpha_val)
-        print(beta_val)
+        print('alpha:', alpha_val)
+        print('beta:', beta_val)
 
-        for epoch in range(100):
+        for epoch in range(N_epochs):
             print('Epoch: ', epoch)
-            sess.run(update, feed_dict={x: x_train, y: y_train})
+            for i in range(N_codewords):
+                sess.run(update, feed_dict={x: x_train[i], y: y_train})
+                print('cost :', sess.run(cost, feed_dict={x: x_train[i], y: y_train}))
 
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
@@ -238,5 +248,5 @@ if __name__ == '__main__':
     # Play a sound when the process finishes.
     import winsound
     duration = 1000  # millisecond
-    freq = 440  # Hz
+    freq = 440       # Hz
     winsound.Beep(freq, duration)

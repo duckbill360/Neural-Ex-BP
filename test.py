@@ -49,6 +49,7 @@ def get_iris_data():
 
 def main():
     train_X, test_X, train_y, test_y = get_iris_data()
+    print(train_X)
 
     # Layer's sizes
     x_size = train_X.shape[1]   # Number of input nodes: 4 features and 1 bias
@@ -94,6 +95,7 @@ def main():
 
         print("Epoch = %d, train accuracy = %.2f%%, test accuracy = %.2f%%"
               % (epoch + 1, 100. * train_accuracy, 100. * test_accuracy))
+        print('cost :', sess.run(cost, feed_dict={X: train_X, y: train_y}))
 
     sess.close()
 
