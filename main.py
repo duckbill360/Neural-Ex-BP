@@ -165,7 +165,8 @@ def forwardprop(x_LLR, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    y_hat = (tf.sign(output_layer) + 1) / 2
+    # y_hat = (tf.sign(output_layer) + 1) / 2
+    y_hat = tf.sigmoid(tf.negative(output_layer))
 
     # Return a length-N vector
     return y_hat
@@ -204,8 +205,10 @@ if __name__ == '__main__':
     #                     expected_shape=(iter_num, N // 2, ), name='alpha', trainable=True)
     # beta = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
     #                    expected_shape=(iter_num, N // 2, ), name='beta', trainable=True)
-    alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((N, ), dtype=tf.float64), name='alpha', trainable=True) for _ in range(iter_num)]
-    beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta', trainable=True) for _ in range(iter_num)]
+    alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((N, ), dtype=tf.float64), name='alpha', trainable=True)
+             for _ in range(iter_num)]
+    beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta'
+                        , trainable=True) for _ in range(iter_num)]
 
     # y_hat is a length-N vector.
     y_hat = forwardprop(x, alpha, beta)
@@ -215,9 +218,9 @@ if __name__ == '__main__':
     #     writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
     # TensorBoard command: tensorboard --logdir="./TensorBoard"
 
-    cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
-    # cost = tf.reduce_sum(tf.square(y - y_hat))
-    update = tf.train.GradientDescentOptimizer(0.001).minimize(cost)
+    # cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
+    cost = tf.reduce_sum(tf.square(y - y_hat))
+    update = tf.train.GradientDescentOptimizer(0.1).minimize(cost)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -240,8 +243,8 @@ if __name__ == '__main__':
 
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
-        print(alpha_val)
-        print(beta_val)
+        print('alpha:', alpha_val)
+        print('beta:', beta_val)
 
         writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
 
