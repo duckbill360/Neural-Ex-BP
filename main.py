@@ -84,8 +84,6 @@ def forwardprop(x_LLR, alpha, beta):
         previous_layer = concatenate(upper, lower)
 
         # This is for the Ex-BP decoder.
-
-
         upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
         lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
         Ex_counter += 1
