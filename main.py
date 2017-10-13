@@ -239,7 +239,7 @@ if __name__ == '__main__':
             print('Epoch: ', epoch)
             for i in range(N_codewords):
                 sess.run(update, feed_dict={x: x_train[i], y: y_train})
-                print('cost :', sess.run(cost, feed_dict={x: x_train[i], y: y_train}))
+                print('cost ', i, ':', sess.run(cost, feed_dict={x: x_train[i], y: y_train}))
 
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
