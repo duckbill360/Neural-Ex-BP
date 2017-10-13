@@ -4,14 +4,11 @@ import polar_codes
 import numpy as np
 import tensorflow as tf
 
-import os
-# os.environ['TF_CPP_MIN_LOG_LEVEL'] = '3'
-
 ############### Polar Codes PARAMETERS ###############
 N_codewords = 20
-N_epochs = 100
+N_epochs = 1000
 iter_num = 5
-N = 1024           # code length
+N = 8           # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
@@ -30,7 +27,6 @@ G = polar_codes.generate_G_N(N)
 def forwardprop(x, alpha, beta):
 
     x_LLR = 2 * x / np.power(sigma, 2)
-    print(x_LLR)
 
     # The list of all hidden layers
     hidden_layers = []
@@ -39,12 +35,13 @@ def forwardprop(x, alpha, beta):
     # LLR = [0 for i in range(N)]
     LLR = np.zeros((N, ), dtype=np.float64)
     for i in frozen_indexes:
-        LLR[i] = 1000000000
-    LLR = np.dot(LLR, B_N)
+        LLR[i] = 1000000
+    LLR_permuted = np.dot(LLR, B_N)
     # This must be checked.
 
-    R_LLR = tf.constant(LLR, dtype=tf.float64)
-    N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
+    R_LLR = tf.constant(LLR_permuted, dtype=tf.float64)
+    # N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
+    N_2_zeros = tf.zeros(shape=(N // 2, ), dtype=tf.float64)
     Ex_counter = 0
 
     #####################################################
