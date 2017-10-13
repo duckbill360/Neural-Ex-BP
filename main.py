@@ -10,13 +10,13 @@ import os
 ############### Polar Codes PARAMETERS ###############
 N_codewords = 20
 N_epochs = 100
-iter_num = 2
-N = 8           # code length
+iter_num = 5
+N = 1024           # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 2.0
+SNR_in_db = 1.0
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
@@ -27,15 +27,20 @@ frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
 G = polar_codes.generate_G_N(N)
 
 
-def forwardprop(x_LLR, alpha, beta):
+def forwardprop(x, alpha, beta):
+
+    x_LLR = 2 * x / np.power(sigma, 2)
 
     # The list of all hidden layers
     hidden_layers = []
 
     # Initialize R_LLR
-    LLR = [0 for i in range(N)]
+    # LLR = [0 for i in range(N)]
+    LLR = np.zeros((N, ), dtype=np.float64)
     for i in frozen_indexes:
         LLR[i] = 1000000
+    LLR = np.dot(LLR, B_N)
+    # This must be checked. 
 
     R_LLR = tf.constant(LLR, dtype=tf.float64)
     N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
@@ -46,9 +51,6 @@ def forwardprop(x_LLR, alpha, beta):
     # The first R hidden layer, so take R_LLR as an input, and view L as 0
     cur_idx = 0
     print('R Layer :', cur_idx)
-    # for j in range(N // 2):
-    #     hidden_layers[0][2 * j].assign(f(R_LLR[j], R_LLR[j + N // 2] + zero_float))
-    #     hidden_layers[0][2 * j + 1].assign(f(zero_float, R_LLR[j]) + R_LLR[j + N // 2])
     upper = f(R_LLR[: N // 2], R_LLR[N // 2:] + N_2_zeros)
     lower = f(N_2_zeros, R_LLR[: N // 2]) + R_LLR[N // 2:]
     previous_layer = interlace(upper, lower)
@@ -58,10 +60,6 @@ def forwardprop(x_LLR, alpha, beta):
     for i in range(n - 2):
         cur_idx += 1
         print("R Layer :", cur_idx)
-        # for j in range(N // 2):
-        #     hidden_layers[i][2 * j].assign(f(hidden_layers[i - 1][j], hidden_layers[i - 1][j + N // 2] + zero_float))
-        #
-        #     hidden_layers[i][2 * j + 1].assign(f(zero_float, hidden_layers[i - 1][j]) + hidden_layers[i - 1][j + N // 2])
         upper = f(previous_layer[: N // 2], previous_layer[N // 2:] + N_2_zeros)
         lower = f(N_2_zeros, previous_layer[: N // 2]) + previous_layer[N // 2:]
         previous_layer = interlace(upper, lower)
@@ -190,7 +188,10 @@ def add_noise(signal):
 
 if __name__ == '__main__':
 
-    x_train = [add_noise(np.zeros((N, ))) for i in range(N_codewords)]
+    import timeit
+    start = timeit.default_timer()
+
+    x_train = [add_noise(np.ones((N, ))) for i in range(N_codewords)]
     y_train = np.zeros((N, ))
 
     # x is the input vector; y is the output vector (Length: N)
@@ -199,10 +200,6 @@ if __name__ == '__main__':
 
     # alpha and beta are the weights to be trained of the Ex-BP decoder.
     # Can also be initialized using "random_normal".
-    # alpha = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
-    #                     expected_shape=(iter_num, N // 2, ), name='alpha', trainable=True)
-    # beta = tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((iter_num, N, ), dtype=tf.float64),
-    #                    expected_shape=(iter_num, N // 2, ), name='beta', trainable=True)
     alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((N, ), dtype=tf.float64), name='alpha', trainable=True)
              for _ in range(iter_num)]
     beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta'
@@ -211,14 +208,9 @@ if __name__ == '__main__':
     # y_hat is a length-N vector.
     y_hat = forwardprop(x, alpha, beta)
 
-    # with tf.Session() as sess:
-    #     sess.run(tf.global_variables_initializer())
-    #     writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
-    # TensorBoard command: tensorboard --logdir="./TensorBoard"
-
     # cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
     cost = tf.reduce_sum(tf.square(y - y_hat))
-    update = tf.train.GradientDescentOptimizer(0.1).minimize(cost)
+    update = tf.train.AdamOptimizer(0.01).minimize(cost)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
@@ -245,6 +237,10 @@ if __name__ == '__main__':
         print('beta:', beta_val)
 
         writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
+        # TensorBoard command: tensorboard --logdir="./TensorBoard"
+
+    stop = timeit.default_timer()
+    print('\nRun time :', (stop - start) // 60, 'minutes,', (stop - start) % 60, 'seconds')
 
     # Play a sound when the process finishes.
     import winsound
