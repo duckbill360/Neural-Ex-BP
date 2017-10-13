@@ -30,6 +30,7 @@ G = polar_codes.generate_G_N(N)
 def forwardprop(x, alpha, beta):
 
     x_LLR = 2 * x / np.power(sigma, 2)
+    print(x_LLR)
 
     # The list of all hidden layers
     hidden_layers = []
@@ -38,9 +39,9 @@ def forwardprop(x, alpha, beta):
     # LLR = [0 for i in range(N)]
     LLR = np.zeros((N, ), dtype=np.float64)
     for i in frozen_indexes:
-        LLR[i] = 1000000
+        LLR[i] = 1000000000
     LLR = np.dot(LLR, B_N)
-    # This must be checked. 
+    # This must be checked.
 
     R_LLR = tf.constant(LLR, dtype=tf.float64)
     N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
@@ -202,28 +203,24 @@ if __name__ == '__main__':
     # Can also be initialized using "random_normal".
     alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((N, ), dtype=tf.float64), name='alpha', trainable=True)
              for _ in range(iter_num)]
-    beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta'
-                        , trainable=True) for _ in range(iter_num)]
+    beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((N, ), dtype=tf.float64), name='beta', trainable=True)
+            for _ in range(iter_num)]
 
     # y_hat is a length-N vector.
     y_hat = forwardprop(x, alpha, beta)
 
     # cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
-    cost = tf.reduce_sum(tf.square(y - y_hat))
+    # cost = tf.reduce_sum(tf.square(y - y_hat))
+    cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
     update = tf.train.AdamOptimizer(0.01).minimize(cost)
 
     with tf.Session() as sess:
         sess.run(tf.global_variables_initializer())
 
-        print('x_train :', x_train[0])
-        print('y_train :', y_train)
-        print('y_hat :', sess.run(y_hat, feed_dict={x: x_train[0]}))
-        cost_val = sess.run(cost, feed_dict={x: x_train[0], y: y_train})
-
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
-        print('alpha:', alpha_val)
-        print('beta:', beta_val)
+        print('Initial alpha:', alpha_val)
+        print('Initial beta:', beta_val)
 
         for epoch in range(N_epochs):
             print('Epoch: ', epoch)
@@ -233,8 +230,8 @@ if __name__ == '__main__':
 
         alpha_val = sess.run(alpha)
         beta_val = sess.run(beta)
-        print('alpha:', alpha_val)
-        print('beta:', beta_val)
+        print('Trained alpha:', alpha_val)
+        print('Trained beta:', beta_val)
 
         writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
         # TensorBoard command: tensorboard --logdir="./TensorBoard"
