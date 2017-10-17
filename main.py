@@ -35,7 +35,7 @@ def forwardprop(x, alpha, beta):
     # LLR = [0 for i in range(N)]
     LLR = np.zeros((N, ), dtype=np.float64)
     for i in frozen_indexes:
-        LLR[i] = 1000000
+        LLR[i] = 1000000000
     LLR_permuted = np.dot(LLR, B_N)
     # This must be checked.
 
@@ -71,14 +71,16 @@ def forwardprop(x, alpha, beta):
     # Run through 'iter_num' times.
     # Each iteration consists of 1 full L propagation and 1 full R propagation.
     for k in range(iter_num - 1):
+        print('Iteration:', k)
         ###### L Propagation
         # The first L propagation layer.
         cur_idx += 1
         print("L Layer :", cur_idx)
         upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
         lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
-        previous_layer = concatenate(upper, lower)
+        # previous_layer = concatenate(upper, lower)
 
+        ###############################
         # This is for the Ex-BP decoder.
         upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
         lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
@@ -125,8 +127,9 @@ def forwardprop(x, alpha, beta):
     print("L Layer :", cur_idx)
     upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
     lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
-    previous_layer = concatenate(upper, lower)
+    # previous_layer = concatenate(upper, lower)
 
+    ###############################
     # This is for the Ex-BP decoder.
     upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
     lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
@@ -149,7 +152,7 @@ def forwardprop(x, alpha, beta):
 
     # This is for the output layer.
     cur_idx += 1
-    print("L Layer :", cur_idx)
+    print("The final L Layer :", cur_idx)
     upper = f(previous_layer[: N: 2], previous_layer[1: N: 2] + R_LLR[N // 2:])
     lower = f(R_LLR[: N // 2], previous_layer[: N: 2]) + previous_layer[1: N: 2]
     previous_layer = concatenate(upper, lower)
@@ -189,6 +192,7 @@ if __name__ == '__main__':
     import timeit
     start = timeit.default_timer()
 
+    # BPSK maps '0's to '1's.
     x_train = [add_noise(np.ones((N, ))) for i in range(N_codewords)]
     y_train = np.zeros((N, ))
 
