@@ -8,7 +8,7 @@ import tensorflow as tf
 ############### Polar Codes PARAMETERS ###############
 N_codewords = 2000
 N_epochs = 100
-iter_num = 1
+iter_num = 5
 N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
@@ -25,13 +25,14 @@ G = polar_codes.generate_G_N(N)
 frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
 
 frozen_list = np.ones((N, ))
-inverse_frozen_list = np.zeros((N, ))
 
 for index in frozen_indexes:
     frozen_list[index] = 0
 
-for index in frozen_indexes:
-    inverse_frozen_list[index] = 1
+inverse_frozen_list = np.ones((N, )) - frozen_list
+
+frozen_list = np.dot(frozen_list, B_N)
+inverse_frozen_list = np.dot(inverse_frozen_list, B_N)
 
 
 def forwardprop(x, alpha, beta):
@@ -50,7 +51,6 @@ def forwardprop(x, alpha, beta):
     # This must be checked.
 
     R_LLR = tf.constant(LLR_permuted, dtype=tf.float64)
-    # N_2_zeros = tf.constant(0, dtype=tf.float64, shape=(N // 2,))
     N_2_zeros = tf.zeros(shape=(N // 2, ), dtype=tf.float64)
     Ex_counter = 0
 
@@ -169,9 +169,9 @@ def forwardprop(x, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    # output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * 1000000
+    output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * 1000000
 
-    y_hat = tf.negative(output_layer)
+    y_hat = tf.sigmoid(tf.negative(output_layer))
 
     # Return a length-N vector
     return y_hat
@@ -201,7 +201,7 @@ if __name__ == '__main__':
     start = timeit.default_timer()
 
     x_train = [add_noise(np.ones((N, ))) for i in range(N_codewords)]
-    y_train = np.ones((N, )) * (-1000000)
+    y_train = np.zeros((N, ))
 
     # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(tf.float64, shape=(N, ), name='x')
@@ -217,9 +217,9 @@ if __name__ == '__main__':
     # y_hat is a length-N vector.
     y_hat = forwardprop(x, alpha, beta)
 
-    cost = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat)
+    # cost = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat))
     # cost = tf.reduce_sum(tf.square(y - y_hat))
-    # cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
+    cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
     update = tf.train.AdamOptimizer(0.01).minimize(cost)
 
     with tf.Session() as sess:
