@@ -4,24 +4,34 @@ import polar_codes
 import numpy as np
 import tensorflow as tf
 
+
 ############### Polar Codes PARAMETERS ###############
-N_codewords = 20
-N_epochs = 1000
-iter_num = 5
-N = 8           # code length
+N_codewords = 2000
+N_epochs = 100
+iter_num = 1
+N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 1.0
+SNR_in_db = 1.5
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
 sigma = pow(Var, 1 / 2)
 
 B_N = polar_codes.permutation_matrix(N)
-frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
 G = polar_codes.generate_G_N(N)
+frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
+
+frozen_list = np.ones((N, ))
+inverse_frozen_list = np.zeros((N, ))
+
+for index in frozen_indexes:
+    frozen_list[index] = 0
+
+for index in frozen_indexes:
+    inverse_frozen_list[index] = 1
 
 
 def forwardprop(x, alpha, beta):
@@ -77,7 +87,7 @@ def forwardprop(x, alpha, beta):
         print("L Layer :", cur_idx)
         upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
         lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
-        previous_layer = concatenate(upper, lower)
+        # previous_layer = concatenate(upper, lower)
 
         # This is for the Ex-BP decoder.
         upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
@@ -125,7 +135,7 @@ def forwardprop(x, alpha, beta):
     print("L Layer :", cur_idx)
     upper = f(x_LLR[: N: 2], x_LLR[1: N: 2] + previous_layer[N // 2:])
     lower = f(previous_layer[: N // 2], x_LLR[: N: 2]) + x_LLR[1: N: 2]
-    previous_layer = concatenate(upper, lower)
+    # previous_layer = concatenate(upper, lower)
 
     # This is for the Ex-BP decoder.
     upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
@@ -159,8 +169,9 @@ def forwardprop(x, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    # y_hat = (tf.sign(output_layer) + 1) / 2
-    y_hat = tf.sigmoid(tf.negative(output_layer))
+    # output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * 1000000
+
+    y_hat = tf.negative(output_layer)
 
     # Return a length-N vector
     return y_hat
@@ -190,7 +201,7 @@ if __name__ == '__main__':
     start = timeit.default_timer()
 
     x_train = [add_noise(np.ones((N, ))) for i in range(N_codewords)]
-    y_train = np.zeros((N, ))
+    y_train = np.ones((N, )) * (-1000000)
 
     # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(tf.float64, shape=(N, ), name='x')
@@ -206,32 +217,36 @@ if __name__ == '__main__':
     # y_hat is a length-N vector.
     y_hat = forwardprop(x, alpha, beta)
 
-    # cost = tf.reduce_sum(tf.nn.softmax_cross_entropy_with_logits(labels=y, logits=y_hat))
+    cost = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat)
     # cost = tf.reduce_sum(tf.square(y - y_hat))
-    cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
+    # cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
     update = tf.train.AdamOptimizer(0.01).minimize(cost)
 
     with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
+        with tf.device("/cpu:0"):
+            sess.run(tf.global_variables_initializer())
 
-        alpha_val = sess.run(alpha)
-        beta_val = sess.run(beta)
-        print('Initial alpha:', alpha_val)
-        print('Initial beta:', beta_val)
+            alpha_val = sess.run(alpha)
+            beta_val = sess.run(beta)
+            print('Initial alpha:', alpha_val)
+            print('Initial beta:', beta_val)
 
-        for epoch in range(N_epochs):
-            print('Epoch: ', epoch)
-            for i in range(N_codewords):
-                sess.run(update, feed_dict={x: x_train[i], y: y_train})
-                print('cost ', i, ':', sess.run(cost, feed_dict={x: x_train[i], y: y_train}))
+            for epoch in range(N_epochs):
+                print('Epoch: ', epoch)
+                for i in range(N_codewords):
+                    sess.run(update, feed_dict={x: x_train[i], y: y_train})
+                    print('cost ', i, ':', sess.run(cost, feed_dict={x: x_train[i], y: y_train}))
 
-        alpha_val = sess.run(alpha)
-        beta_val = sess.run(beta)
-        print('Trained alpha:', alpha_val)
-        print('Trained beta:', beta_val)
+            alpha_val = sess.run(alpha)
+            beta_val = sess.run(beta)
+            print('Trained alpha:', alpha_val)
+            print('Trained beta:', beta_val)
 
-        writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
-        # TensorBoard command: tensorboard --logdir="./TensorBoard"
+            np.save('alpha.npy', alpha_val)
+            np.save('beta.npy', beta_val)
+
+            # writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
+            # TensorBoard command: tensorboard --logdir="./TensorBoard"
 
     stop = timeit.default_timer()
     print('\nRun time :', (stop - start) // 60, 'minutes,', (stop - start) % 60, 'seconds')
