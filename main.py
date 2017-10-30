@@ -23,6 +23,7 @@ sigma = pow(Var, 1 / 2)
 B_N = polar_codes.permutation_matrix(N)
 G = polar_codes.generate_G_N(N)
 frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
+BIG_NUM = 1000000
 
 frozen_list = np.ones((N, ))
 
@@ -46,7 +47,7 @@ def forwardprop(x, alpha, beta):
     # LLR = [0 for i in range(N)]
     LLR = np.zeros((N, ), dtype=np.float64)
     for i in frozen_indexes:
-        LLR[i] = 1000000
+        LLR[i] = BIG_NUM
     LLR_permuted = np.dot(LLR, B_N)
     # This must be checked.
 
@@ -169,7 +170,7 @@ def forwardprop(x, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * 1000000
+    output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * BIG_NUM
 
     y_hat = tf.sigmoid(tf.negative(output_layer))
 
