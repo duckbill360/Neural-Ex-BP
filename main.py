@@ -12,14 +12,14 @@ np.core.arrayprint._line_width = 10000
 N_codewords = 24000
 BATCH_SIZE = 120
 N_epochs = 100
-learning_rate = 0.01
+learning_rate = 0.001
 iter_num = 1
 N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 1.5
+SNR_in_db = 1.0
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
@@ -230,13 +230,15 @@ if __name__ == '__main__':
     start = timeit.default_timer()
 
     ###### Training Data ######
-    x_train = add_noise(np.ones((N_codewords, N)))
-    y_train = np.ones((N_codewords, N)) * (-BIG_NUM)
+    x_train = add_noise(np.ones((N_codewords, N), dtype=np.float64))
+    y_train = np.zeros((N_codewords, N), dtype=np.float64)
+
 
     ###### Variable Initialization ######
     # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(dtype=tf.float64, shape=(BATCH_SIZE, N), name='x')
     y = tf.placeholder(dtype=tf.float64, shape=(BATCH_SIZE, N), name='y')
+
 
     # alpha and beta are the weights to be trained of the Ex-BP decoder.
     # Can also be initialized using "random_normal".
@@ -245,14 +247,19 @@ if __name__ == '__main__':
     beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((1, N), dtype=tf.float64), name='beta', trainable=True)
             for _ in range(iter_num)]
 
+
     ###### y_hat is a length-N vector. ######
     y_hat = forwardprop(x, alpha, beta)
 
+
     ###### Cost Function & Training Operation ######
-    # cost = tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat)
+    cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat))
+    # cost = tf.reduce_sum(-tf.log(1 - y_hat))      # hand-coded cost function
     # cost = tf.reduce_sum(tf.square(y - y_hat))
-    cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
+    # cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
+
     update = tf.train.AdamOptimizer(learning_rate).minimize(cost)
+
 
     ###### Training ######
     with tf.Session() as sess:
@@ -277,18 +284,20 @@ if __name__ == '__main__':
                 print('cost ', offset, ':', err)
             error_lst.append(total_err)
 
-        alpha_val = sess.run(alpha)
-        beta_val = sess.run(beta)
-        error_lst = np.array(error_lst) / max(error_lst)
-        print('Trained alpha:', alpha_val)
-        print('Trained beta:', beta_val)
         print('Error:', error_lst)
+        error_lst = np.array(error_lst) / max(error_lst)
         plt.plot(error_lst)
         plt.show()
+
+        alpha_val = sess.run(alpha)
+        beta_val = sess.run(beta)
+        print('Trained alpha:', alpha_val)
+        print('Trained beta:', beta_val)
 
         # Save the weight for validation.
         np.save('alpha.npy', alpha_val)
         np.save('beta.npy', beta_val)
+        print('Parameters saved.')
 
         # writer = tf.summary.FileWriter("TensorBoard/", graph=sess.graph)
         # TensorBoard command: tensorboard --logdir="./TensorBoard"
