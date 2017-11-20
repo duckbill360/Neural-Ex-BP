@@ -12,14 +12,14 @@ np.core.arrayprint._line_width = 10000
 N_codewords = 24000
 BATCH_SIZE = 120
 N_epochs = 100
-learning_rate = 0.001
-iter_num = 1
+learning_rate = 0.0002
+iter_num = 5
 N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 1.0
+SNR_in_db = 2.0
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
@@ -112,13 +112,17 @@ def forwardprop(x, alpha, beta):
         # The first L propagation layer.
         cur_idx += 1
         print("L Layer :", cur_idx)
-        upper = f(channel_LLR[: N: 2], channel_LLR[1: N: 2] + previous_layer[N // 2:])
-        lower = f(previous_layer[: N // 2], channel_LLR[: N: 2]) + channel_LLR[1: N: 2]
+        upper = f(channel_LLR[:, : N: 2], channel_LLR[:, 1: N: 2] + previous_layer[:, N // 2:])
+        lower = f(previous_layer[:, : N // 2], channel_LLR[:, : N: 2]) + channel_LLR[:, 1: N: 2]
         # previous_layer = concatenate(upper, lower)
 
         # This is for the Ex-BP decoder.
-        upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[N // 2:]
-        lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[: N // 2]
+        upper_Ex = tf.multiply(alpha[Ex_counter][0, : N // 2], upper) + \
+                   tf.multiply(beta[Ex_counter][0, N // 2:], previous_layer[:, N // 2:])
+        lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + \
+                   tf.multiply(beta[Ex_counter][0, : N // 2], previous_layer[:, : N // 2])
+        # upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[:, N // 2:]
+        # lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[:, : N // 2]
         Ex_counter += 1
         previous_layer = concatenate(upper_Ex, lower_Ex)
         ###############################
@@ -131,8 +135,8 @@ def forwardprop(x, alpha, beta):
             print("L Layer :", cur_idx)
             corresponding_R_idx = cur_idx - (2 * i + 3)
             corresponding_R_layer = hidden_layers[corresponding_R_idx]
-            upper = f(previous_layer[: N: 2], previous_layer[1: N: 2] + corresponding_R_layer[N // 2:])
-            lower = f(corresponding_R_layer[: N // 2], previous_layer[: N: 2]) + previous_layer[1: N: 2]
+            upper = f(previous_layer[:, : N: 2], previous_layer[:, 1: N: 2] + corresponding_R_layer[:, N // 2:])
+            lower = f(corresponding_R_layer[:, : N // 2], previous_layer[:, : N: 2]) + previous_layer[:, 1: N: 2]
             previous_layer = concatenate(upper, lower)
             hidden_layers.append(previous_layer)
 
@@ -141,8 +145,8 @@ def forwardprop(x, alpha, beta):
         # The first R propagation layer.
         cur_idx += 1
         print("R Layer :", cur_idx)
-        upper = f(decision_LLR[: N // 2], decision_LLR[N // 2:] + previous_layer[1: N: 2])
-        lower = f(previous_layer[: N: 2], decision_LLR[: N // 2]) + decision_LLR[N // 2:]
+        upper = f(decision_LLR[:, : N // 2], decision_LLR[:, N // 2:] + previous_layer[:, 1: N: 2])
+        lower = f(previous_layer[:, : N: 2], decision_LLR[:, : N // 2]) + decision_LLR[:, N // 2:]
         previous_layer = interlace(upper, lower)
         hidden_layers.append(previous_layer)
 
@@ -152,8 +156,8 @@ def forwardprop(x, alpha, beta):
             print("R Layer :", cur_idx)
             corresponding_L_idx = cur_idx - (2 * i + 3)
             corresponding_L_layer = hidden_layers[corresponding_L_idx]
-            upper = f(previous_layer[: N // 2], previous_layer[N // 2:] + corresponding_L_layer[1: N: 2])
-            lower = f(corresponding_L_layer[: N: 2], previous_layer[: N // 2]) + previous_layer[N // 2:]
+            upper = f(previous_layer[:, : N // 2], previous_layer[:, N // 2:] + corresponding_L_layer[:, 1: N: 2])
+            lower = f(corresponding_L_layer[:, : N: 2], previous_layer[:, : N // 2]) + previous_layer[:, N // 2:]
             previous_layer = interlace(upper, lower)
             hidden_layers.append(previous_layer)
 
@@ -195,7 +199,7 @@ def forwardprop(x, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * BIG_NUM
+    # output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * BIG_NUM
 
     y_hat = tf.negative(output_layer)
 
@@ -235,13 +239,11 @@ if __name__ == '__main__':
 
 
     ###### Variable Initialization ######
-    # x is the input vector; y is the output vector (Length: N)
     x = tf.placeholder(dtype=tf.float64, shape=(BATCH_SIZE, N), name='x')
     y = tf.placeholder(dtype=tf.float64, shape=(BATCH_SIZE, N), name='y')
 
 
     # alpha and beta are the weights to be trained of the Ex-BP decoder.
-    # Can also be initialized using "random_normal".
     alpha = [tf.Variable(dtype=tf.float64, initial_value=tf.ones((1, N), dtype=tf.float64), name='alpha', trainable=True)
              for _ in range(iter_num)]
     beta = [tf.Variable(dtype=tf.float64, initial_value=tf.random_normal((1, N), dtype=tf.float64), name='beta', trainable=True)
@@ -284,7 +286,7 @@ if __name__ == '__main__':
                 print('cost ', offset, ':', err)
             error_lst.append(total_err)
 
-        print('Error:', error_lst)
+        print('Error:', error_lst, '\n\n')
         error_lst = np.array(error_lst) / max(error_lst)
         plt.plot(error_lst)
         plt.show()
