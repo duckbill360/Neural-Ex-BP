@@ -13,13 +13,13 @@ N_codewords = 24000
 BATCH_SIZE = 120
 N_epochs = 100
 learning_rate = 0.0002
-iter_num = 5
+iter_num = 1
 N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 2.0
+SNR_in_db = 1.5
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
@@ -54,8 +54,6 @@ for index in frozen_indexes:
 
 inverse_frozen_list = np.ones((1, N)) - frozen_list
 
-frozen_list = np.dot(frozen_list, B_N)
-inverse_frozen_list = np.dot(inverse_frozen_list, B_N)
 
 
 def forwardprop(x, alpha, beta):
@@ -199,7 +197,8 @@ def forwardprop(x, alpha, beta):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
-    # output_layer = output_layer * frozen_list + output_layer * inverse_frozen_list * BIG_NUM
+    output_layer = tf.matmul(output_layer, B_N)
+    output_layer = output_layer * frozen_list + inverse_frozen_list * BIG_NUM
 
     y_hat = tf.negative(output_layer)
 
@@ -255,11 +254,7 @@ if __name__ == '__main__':
 
 
     ###### Cost Function & Training Operation ######
-    cost = tf.reduce_mean(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat))
-    # cost = tf.reduce_sum(-tf.log(1 - y_hat))      # hand-coded cost function
-    # cost = tf.reduce_sum(tf.square(y - y_hat))
-    # cost = tf.losses.mean_squared_error(labels=y, predictions=y_hat)
-
+    cost = tf.reduce_sum(tf.nn.sigmoid_cross_entropy_with_logits(labels=y, logits=y_hat))
     update = tf.train.AdamOptimizer(learning_rate).minimize(cost)
 
 
