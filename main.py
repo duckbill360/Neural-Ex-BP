@@ -55,7 +55,6 @@ for index in frozen_indexes:
 inverse_frozen_list = np.ones((1, N)) - frozen_list
 
 
-
 def forwardprop(x, alpha, beta):
 
     channel_LLR = 2 * x / np.power(sigma, 2)
