@@ -5,21 +5,21 @@ import numpy as np
 import tensorflow as tf
 import matplotlib.pyplot as plt
 
-np.set_printoptions(edgeitems=10000)
-np.core.arrayprint._line_width = 10000
+# np.set_printoptions(edgeitems=10000)
+# np.core.arrayprint._line_width = 10000
 
 ############### Polar Codes PARAMETERS ###############
 N_codewords = 24000
 BATCH_SIZE = 120
 N_epochs = 100
-learning_rate = 0.0002
-iter_num = 1
+learning_rate = 0.001
+iter_num = 2
 N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 1.5
+SNR_in_db = 2.5
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
@@ -45,7 +45,7 @@ B_N = polar_codes.permutation_matrix(N)
 G = polar_codes.generate_G_N(N)
 interleaver = generate_interleaver_matrix(N)
 frozen_indexes = polar_codes.generate_frozen_set_indexes(N, R, epsilon)
-BIG_NUM = 1000000
+BIG_NUM = 1000000000
 
 frozen_list = np.ones((1, N))
 
@@ -118,8 +118,6 @@ def forwardprop(x, alpha, beta):
                    tf.multiply(beta[Ex_counter][0, N // 2:], previous_layer[:, N // 2:])
         lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + \
                    tf.multiply(beta[Ex_counter][0, : N // 2], previous_layer[:, : N // 2])
-        # upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[:, N // 2:]
-        # lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[:, : N // 2]
         Ex_counter += 1
         previous_layer = concatenate(upper_Ex, lower_Ex)
         ###############################
@@ -166,8 +164,10 @@ def forwardprop(x, alpha, beta):
     # previous_layer = concatenate(upper, lower)
 
     # This is for the Ex-BP decoder.
-    upper_Ex = tf.multiply(alpha[Ex_counter][0, : N // 2], upper) + tf.multiply(beta[Ex_counter][0, N // 2:], previous_layer[:, N // 2:])
-    lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + tf.multiply(beta[Ex_counter][0, : N // 2], previous_layer[:, : N // 2])
+    upper_Ex = tf.multiply(alpha[Ex_counter][0, : N // 2], upper) + \
+               tf.multiply(beta[Ex_counter][0, N // 2:], previous_layer[:, N // 2:])
+    lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + \
+               tf.multiply(beta[Ex_counter][0, : N // 2], previous_layer[:, : N // 2])
     Ex_counter += 1
     previous_layer = concatenate(upper_Ex, lower_Ex)
     ###############################
@@ -232,8 +232,23 @@ if __name__ == '__main__':
     start = timeit.default_timer()
 
     ###### Training Data ######
-    x_train = add_noise(np.ones((N_codewords, N), dtype=np.float64))
-    y_train = np.zeros((N_codewords, N), dtype=np.float64)
+    print('Creating message......')
+    message = np.array([polar_codes.random_message_with_frozen_bits(N, R, epsilon, frozen_indexes) for _ in range(N_codewords)])
+    print(message)
+    print('Encoding......')
+    codeword = polar_codes.encode(message, G)
+    print(codeword)
+    print('Modulating......')
+    signal = codeword * (-2) + 1
+    print(signal)
+
+    print('Adding noise......')
+    x_train = add_noise(signal)
+    print(x_train)
+    y_train = message
+
+    # x_train = add_noise(np.ones((N_codewords, N), dtype=np.float64))
+    # y_train = np.zeros((N_codewords, N), dtype=np.float64)
 
 
     ###### Variable Initialization ######
@@ -280,6 +295,13 @@ if __name__ == '__main__':
                 print('cost ', offset, ':', err)
             error_lst.append(total_err)
 
+        # Play a sound when the training process finishes.
+        import winsound
+        duration = 1000  # millisecond
+        freq = 440  # Hz
+        winsound.Beep(freq, duration)
+
+        # Plot the result.
         print('Error:', error_lst, '\n\n')
         error_lst = np.array(error_lst) / max(error_lst)
         plt.plot(error_lst)
@@ -300,9 +322,3 @@ if __name__ == '__main__':
 
     stop = timeit.default_timer()
     print('\nRun time :', (stop - start) // 60, 'minutes,', (stop - start) % 60, 'seconds')
-
-    # Play a sound when the process finishes.
-    import winsound
-    duration = 1000  # millisecond
-    freq = 440       # Hz
-    winsound.Beep(freq, duration)

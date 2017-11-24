@@ -13,18 +13,22 @@ N_codewords = 24000
 BATCH_SIZE = 2
 N_epochs = 100
 learning_rate = 0.01
-iter_num = 5
-N = 8   # code length
+iter_num = 1
+N = 1024   # code length
 n = int(np.log2(N))
 layers_per_iter = 2 * n - 2     # Need an additional L layer.
 R = 0.5         # code rate
 epsilon = 0.45   # cross-over probability for a BEC
-SNR_in_db = 2.0
+SNR_in_db = 1.5
 ######################################################
 
 Var = 1 / (2 * R * pow(10.0, SNR_in_db / 10.0))
 sigma = pow(Var, 1 / 2)
 
+alpha = np.load('alpha.npy')
+beta = np.load('beta.npy')
+alpha = np.squeeze(alpha, axis=1)
+beta = np.squeeze(beta, axis=1)
 
 def generate_interleaver_matrix(N):
     matrix = np.zeros(shape=(N, N))
@@ -59,6 +63,7 @@ inverse_frozen_list = np.dot(inverse_frozen_list, B_N)
 
 
 def forwardprop(x):
+
     channel_LLR = 2 * x / np.power(sigma, 2)
     print("channel_LLR's shape :", channel_LLR.shape)
 
@@ -113,17 +118,15 @@ def forwardprop(x):
         print("L Layer :", cur_idx)
         upper = f(channel_LLR[:, : N: 2], channel_LLR[:, 1: N: 2] + previous_layer[:, N // 2:])
         lower = f(previous_layer[:, : N // 2], channel_LLR[:, : N: 2]) + channel_LLR[:, 1: N: 2]
-        previous_layer = concatenate(upper, lower)
+        # previous_layer = concatenate(upper, lower)
 
         # This is for the Ex-BP decoder.
-        # upper_Ex = tf.multiply(alpha[Ex_counter][0, : N // 2], upper) + \
-        #            tf.multiply(beta[Ex_counter][0, N // 2:], previous_layer[:, N // 2:])
-        # lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + \
-        #            tf.multiply(beta[Ex_counter][0, : N // 2], previous_layer[:, : N // 2])
-        # upper_Ex = alpha[Ex_counter][: N // 2] * upper + beta[Ex_counter][N // 2:] * previous_layer[:, N // 2:]
-        # lower_Ex = alpha[Ex_counter][N // 2:] * lower + beta[Ex_counter][: N // 2] * previous_layer[:, : N // 2]
-        # Ex_counter += 1
-        # previous_layer = concatenate(upper_Ex, lower_Ex)
+        upper_Ex = tf.multiply(alpha[Ex_counter, : N // 2], upper) + \
+                   tf.multiply(beta[Ex_counter, N // 2:], previous_layer[:, N // 2:])
+        lower_Ex = tf.multiply(alpha[Ex_counter, N // 2:], lower) + \
+                   tf.multiply(beta[Ex_counter, : N // 2], previous_layer[:, : N // 2])
+        Ex_counter += 1
+        previous_layer = concatenate(upper_Ex, lower_Ex)
         ###############################
 
         hidden_layers.append(previous_layer)
@@ -138,6 +141,7 @@ def forwardprop(x):
             lower = f(corresponding_R_layer[:, : N // 2], previous_layer[:, : N: 2]) + previous_layer[:, 1: N: 2]
             previous_layer = concatenate(upper, lower)
             hidden_layers.append(previous_layer)
+
 
         ###### R Propagation
         # The first R propagation layer.
@@ -164,15 +168,15 @@ def forwardprop(x):
     print("L Layer :", cur_idx)
     upper = f(channel_LLR[:, : N: 2], channel_LLR[:, 1: N: 2] + previous_layer[:, N // 2:])
     lower = f(previous_layer[:, : N // 2], channel_LLR[:, : N: 2]) + channel_LLR[:, 1: N: 2]
-    previous_layer = concatenate(upper, lower)
+    # previous_layer = concatenate(upper, lower)
 
     # This is for the Ex-BP decoder.
-    # upper_Ex = tf.multiply(alpha[Ex_counter][0, : N // 2], upper) + tf.multiply(beta[Ex_counter][0, N // 2:],
-    #                                                                             previous_layer[:, N // 2:])
-    # lower_Ex = tf.multiply(alpha[Ex_counter][0, N // 2:], lower) + tf.multiply(beta[Ex_counter][0, : N // 2],
-    #                                                                            previous_layer[:, : N // 2])
-    # Ex_counter += 1
-    # previous_layer = concatenate(upper_Ex, lower_Ex)
+    upper_Ex = tf.multiply(alpha[Ex_counter, : N // 2], upper) + \
+               tf.multiply(beta[Ex_counter, N // 2:], previous_layer[:, N // 2:])
+    lower_Ex = tf.multiply(alpha[Ex_counter, N // 2:], lower) + \
+               tf.multiply(beta[Ex_counter, : N // 2], previous_layer[:, : N // 2])
+    Ex_counter += 1
+    previous_layer = concatenate(upper_Ex, lower_Ex)
     ###############################
     hidden_layers.append(previous_layer)
 
@@ -199,6 +203,7 @@ def forwardprop(x):
 
     # Take the last hidden layer as the output layer.
     output_layer = hidden_layers[-1]
+    output_layer = tf.matmul(output_layer, B_N)
 
     # Return a length-N vector
     return output_layer
@@ -231,7 +236,7 @@ if __name__ == '__main__':
     start = timeit.default_timer()
 
     ###### Training Data ######
-    signal = np.load('signal.npy')
+    signal = np.load('signal2.npy')
 
     ###### Variable Initialization ######
     # x is the input vector; y is the output vector (Length: N)
@@ -248,7 +253,7 @@ if __name__ == '__main__':
     with tf.Session() as sess:
         output_layer = sess.run(y_hat, feed_dict={x: signal})
         print(output_layer)
-        b = np.load('1.npy')
+        b = np.load('2.npy')
         print(b)
         print(output_layer == b)
 
